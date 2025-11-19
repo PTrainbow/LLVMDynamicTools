@@ -283,3 +283,13 @@ DynamicValue Interpreter::runFunction(const llvm::Function* func, const std::vec
 	std::vector<DynamicValue> argValues = args;
 	return callFunction(func, std::move(argValues));
 }
+
+void Interpreter::registerExternalFunction(const std::string& name, ExternalFunctionCallback callback)
+{
+	externalCallbacks[name] = callback;
+}
+
+void Interpreter::unregisterExternalFunction(const std::string& name)
+{
+	externalCallbacks.erase(name);
+}

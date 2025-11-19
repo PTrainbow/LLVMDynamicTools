@@ -51,10 +51,21 @@ DynamicValue Interpreter::callExternalFunction(const CallBase* cs, const llvm::F
 		}
 	};
 
-	auto itr = externalFuncMap.find(f->getName().str());
+	// First check if there's a registered callback for this function
+	auto funcName = f->getName().str();
+	auto callbackItr = externalCallbacks.find(funcName);
+	if (callbackItr != externalCallbacks.end())
+	{
+		// Use registered callback
+		return callbackItr->second(f, argValues);
+	}
+	
+	// Otherwise, check built-in functions
+	auto itr = externalFuncMap.find(funcName);
 	if (itr == externalFuncMap.end())
 	{
-		errs() << "Unknown external function: " << f->getName() << "\n";
+		errs() << "Unknown external function: " << funcName << "\n";
+		errs() << "Hint: Register this function using registerExternalFunction()\n";
 		llvm_unreachable("");
 	}
 

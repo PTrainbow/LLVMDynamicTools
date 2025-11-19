@@ -35,3 +35,4 @@ add_definitions(${LLVM_DEFINITIONS})
 set (EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
 add_subdirectory (src)
+add_subdirectory (examples)

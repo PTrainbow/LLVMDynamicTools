@@ -13,7 +13,7 @@ include_directories(${Boost_INCLUDE_DIR})
 include_directories(${dynamic_pts_SOURCE_DIR}/include/LLVMInterpreter)
 link_directories(${Boost_LIBRARY_DIRS})
 
-set(SourceFiles DynamicValue.cpp Evaluation.cpp External.cpp Interpreter.cpp InfoDump.cpp main.cpp)
+set(SourceFiles DynamicValue.cpp Evaluation.cpp External.cpp Interpreter.cpp InfoDump.cpp main.cpp HotFix.cpp)
 
 add_executable(llvm-interpreter ${SourceFiles}) 
 

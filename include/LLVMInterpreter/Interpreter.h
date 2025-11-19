@@ -5,6 +5,9 @@
 #include "StackFrame.h"
 
 #include "llvm/IR/DataLayout.h"
+#include <functional>
+#include <unordered_map>
+#include <string>
 
 namespace llvm
 {
@@ -58,6 +61,12 @@ private:
 
 	DynamicValue evaluateOperand(const StackFrame& frame, const llvm::Value* v);
 	void evaluateInstruction(StackFrame& frame, const llvm::Instruction* inst);
+	
+	// External function callback type
+	// Callback receives function signature and arguments, returns result
+	using ExternalFunctionCallback = std::function<DynamicValue(const llvm::Function*, const std::vector<DynamicValue>&)>;
+	std::unordered_map<std::string, ExternalFunctionCallback> externalCallbacks;
+	
 public:
 	Interpreter(llvm::Module*);
 	~Interpreter();
@@ -66,6 +75,13 @@ public:
 	int runMain(const llvm::Function* mainFn, const std::vector< std::string>& mainArgs);
 
 	DynamicValue runFunction(const llvm::Function* func, const std::vector<DynamicValue>& args);
+	
+	// Register an external function callback
+	// When bitcode calls an external function with this name, the callback will be invoked
+	void registerExternalFunction(const std::string& name, ExternalFunctionCallback callback);
+	
+	// Unregister an external function
+	void unregisterExternalFunction(const std::string& name);
 };
 
 }
