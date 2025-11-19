@@ -11,7 +11,11 @@ using namespace llvm_fuzzer;
 
 Type* MemoryLoc::getType() const
 {
-	return cast<PointerType>(ptr->getType())->getElementType();
+	// In LLVM 20, pointers are opaque and don't store element type
+	// For fuzzer purposes, we'll use a default type (i8) as a workaround
+	// This is a limitation of opaque pointers - we can't determine the pointee type
+	// without additional context
+	return Type::getInt8Ty(ptr->getContext());
 }
 
 GeneratorEnvironment::GeneratorEnvironment(const GeneratorEnvironment& other) = default;

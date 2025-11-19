@@ -1,6 +1,6 @@
 #include "Interpreter.h"
 
-#include "llvm/IR/CallSite.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -22,7 +22,7 @@ enum class ExternalCallType
 	FREE,
 };
 
-DynamicValue Interpreter::callExternalFunction(ImmutableCallSite cs, const llvm::Function* f, std::vector<DynamicValue>&& argValues)
+DynamicValue Interpreter::callExternalFunction(const CallBase* cs, const llvm::Function* f, std::vector<DynamicValue>&& argValues)
 {
 	static std::unordered_map<std::string, ExternalCallType> externalFuncMap =
 	{
@@ -51,7 +51,7 @@ DynamicValue Interpreter::callExternalFunction(ImmutableCallSite cs, const llvm:
 		}
 	};
 
-	auto itr = externalFuncMap.find(f->getName());
+	auto itr = externalFuncMap.find(f->getName().str());
 	if (itr == externalFuncMap.end())
 	{
 		errs() << "Unknown external function: " << f->getName() << "\n";

@@ -2,7 +2,6 @@
 #define DYNPTS_STACKFRAME_H
 
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Function.h"
 
 #include <unordered_map>

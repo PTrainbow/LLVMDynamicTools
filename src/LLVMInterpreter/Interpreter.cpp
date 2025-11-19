@@ -2,12 +2,13 @@
 
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 using namespace llvm_interpreter;
 
-Interpreter::Interpreter(llvm::Module* m): module(m), dataLayout(m)
+Interpreter::Interpreter(llvm::Module* m): module(m), dataLayout(m->getDataLayout())
 {
 }
 
@@ -34,7 +35,18 @@ void Interpreter::evaluateGlobals()
 
 	for (auto const& globalVal: module->globals())
 	{
-		auto elemType = cast<PointerType>(globalVal.getType())->getElementType();
+		// In LLVM 20, pointers are opaque, so we need to get the element type differently
+		// For globals, the type is the pointer type, and we need to get the pointee type
+		// Since opaque pointers don't store element type, we'll need to handle this differently
+		// For now, try to get it from the initializer if available
+		Type* elemType = nullptr;
+		if (globalVal.hasInitializer()) {
+			elemType = globalVal.getInitializer()->getType();
+		} else {
+			// Fallback: assume it's a pointer to the default type
+			// This is a workaround for opaque pointers
+			elemType = Type::getInt8Ty(module->getContext());
+		}
 		auto globalAddr = allocateGlobalMem(elemType);
 		globalEnv.insert(std::make_pair(&globalVal, globalAddr));
 	}
@@ -101,7 +113,7 @@ DynamicValue Interpreter::runFunction(StackFrame& frame)
 {
 	// Get the current function
 	auto f = frame.getFunction();
-	auto curBB = f->begin();
+	auto curBB = &f->getEntryBlock();
 
 	// This function handles the actual updating of block and instruction iterators as well as execution of all of the PHI nodes in the destination block.
 	auto switchToNewBasicBlock = [this, &curBB, &frame] (const BasicBlock* destBB)
@@ -143,7 +155,7 @@ DynamicValue Interpreter::runFunction(StackFrame& frame)
 			if (instItr->isTerminator())
 				break;
 
-			evaluateInstruction(frame, instItr);
+			evaluateInstruction(frame, &*instItr);
 		}
 
 		auto termInst = curBB->getTerminator();
@@ -257,4 +269,17 @@ int Interpreter::runMain(const Function* mainFn, const std::vector< std::string>
 		return 0;
 	else
 		return retVal.getAsIntValue().getInt().getSExtValue();
+}
+
+DynamicValue Interpreter::runFunction(const llvm::Function* func, const std::vector<DynamicValue>& args)
+{
+	if (func->isDeclaration())
+	{
+		errs() << "Cannot execute external function: " << func->getName() << "\n";
+		return DynamicValue::getUndefValue();
+	}
+	
+	// Convert const vector to moveable vector
+	std::vector<DynamicValue> argValues = args;
+	return callFunction(func, std::move(argValues));
 }

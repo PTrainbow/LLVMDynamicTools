@@ -50,11 +50,11 @@ Function* ProgramGenerator::generateRandomFunction(StringRef funName, FunctionTy
 	auto f = getEmptyFunction(funName, funType);
 
 	// Generate a bunch of stack allocations
-	generateAllocationBlock(f->begin(), env);
+	generateAllocationBlock(&f->getEntryBlock(), env);
 
 	// Generate the function body
 	auto bodyBlock = BasicBlock::Create(f->getContext(), "body", f);
-	BranchInst::Create(bodyBlock, f->begin());
+	BranchInst::Create(bodyBlock, &f->getEntryBlock());
 	auto finalBlock = generateFunctionBody(bodyBlock, env);
 
 	// Generate return instruction
@@ -69,9 +69,9 @@ void ProgramGenerator::generateMainFunction(Function* entryFunc)
 	auto mainFun = getEmptyFunction("main", mainType);
 
 	// The main function just do one thing: call the generated entry function
-	auto bb = mainFun->begin();
+	auto bb = &mainFun->getEntryBlock();
 	IRBuilder<> builder(bb);
-	auto callInst = builder.CreateCall(entryFunc, "main.ret");
+	auto callInst = builder.CreateCall(entryFunc->getFunctionType(), entryFunc, {}, "main.ret");
 	builder.CreateRet(callInst);
 }
 

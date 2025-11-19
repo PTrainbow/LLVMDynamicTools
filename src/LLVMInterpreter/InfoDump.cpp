@@ -1,6 +1,7 @@
 #include "Memory.h"
 #include "Interpreter.h"
 
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include <sstream>
@@ -13,7 +14,9 @@ using namespace llvm_interpreter;
 std::string IntValue::toString() const
 {
 	std::ostringstream ss;
-	ss << "<INT" << intVal.getBitWidth() << " " << intVal.toString(10, false) << ">";
+	llvm::SmallString<32> str;
+	intVal.toString(str, 10, true);
+	ss << "<INT" << intVal.getBitWidth() << " " << str.str().str() << ">";
 	return ss.str();
 }
 

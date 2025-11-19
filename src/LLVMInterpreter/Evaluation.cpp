@@ -2,6 +2,7 @@
 
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/raw_ostream.h"
@@ -546,7 +547,7 @@ DynamicValue Interpreter::evaluateConstantExpr(const llvm::ConstantExpr* cexpr)
 		{
 			auto cmp = [cexpr] (const APInt& i0, const APInt& i1)
 			{
-				switch (cexpr->getPredicate())
+				switch (cast<ICmpInst>(cexpr)->getPredicate())
 				{
 					case CmpInst::ICMP_EQ:
 						return APInt(1, i0 == i1);
@@ -650,7 +651,7 @@ DynamicValue Interpreter::evaluateConstantExpr(const llvm::ConstantExpr* cexpr)
 			auto bothNotNan = !isF0Nan && !isF1Nan;
 			auto eitherIsNan = isF0Nan || isF1Nan;
 
-			switch (cexpr->getPredicate())
+			switch (cast<FCmpInst>(cexpr)->getPredicate())
 			{
 				case CmpInst::FCMP_FALSE:
 					return DynamicValue::getIntValue(APInt(1, false));
@@ -1274,7 +1275,7 @@ void Interpreter::evaluateInstruction(StackFrame& frame, const llvm::Instruction
 				allocElems = sizeVal.getAsIntValue().getInt().getZExtValue();
 			}
 
-			auto allocSize = dataLayout.getTypeAllocSize(allocInst->getType()->getElementType());
+			auto allocSize = dataLayout.getTypeAllocSize(allocInst->getAllocatedType());
 			auto retAddr = allocateStackMem(frame, allocSize);
 			for (auto i = 1; i < allocElems; ++i)
 				allocateStackMem(frame, allocSize);
@@ -1317,19 +1318,45 @@ void Interpreter::evaluateInstruction(StackFrame& frame, const llvm::Instruction
 			auto& basePtrVal = baseVal.getAsPointerValue();
 			auto baseAddr = basePtrVal.getAddress();
 
-			for (auto itr = gep_type_begin(gepInst), ite = gep_type_end(gepInst); itr != ite; ++itr)
+			Type* curType = gepInst->getSourceElementType();
+			for (unsigned i = 0, e = gepInst->getNumIndices(); i < e; ++i)
 			{
-				auto idxVal = evaluateOperand(frame, itr.getOperand());
+				auto idxVal = evaluateOperand(frame, gepInst->getOperand(i + 1));
 				auto seqNum = idxVal.getAsIntValue().getInt().getSExtValue();
 
-				if (auto structType = dyn_cast<StructType>(*itr))
+				if (auto structType = dyn_cast<StructType>(curType))
 				{
 					baseAddr += dataLayout.getStructLayout(structType)->getElementOffset(seqNum);
+					curType = structType->getElementType(seqNum);
+				}
+				else if (curType->isArrayTy() || curType->isVectorTy())
+				{
+					baseAddr += seqNum * dataLayout.getTypeAllocSize(curType->getArrayElementType());
+					curType = curType->getArrayElementType();
+				}
+				else if (curType->isPointerTy())
+				{
+					// Handle pointer arithmetic: ptr + index
+					// In LLVM 20 with opaque pointers, we need to handle this case
+					auto ptrSize = dataLayout.getPointerSize();
+					baseAddr += seqNum * ptrSize;
+					// For opaque pointers, we can't determine the pointee type
+					// This is typically the last index, so we keep curType as pointer
+				}
+				else if (i == 0 && seqNum == 0)
+				{
+					// First index with value 0 on a non-aggregate type
+					// This is valid for opaque pointers - just skip this index
+					// The type remains the same
 				}
 				else
 				{
-					auto seqType = cast<SequentialType>(*itr);
-					baseAddr += seqNum * dataLayout.getTypeAllocSize(seqType->getElementType());
+					// For basic types (i32, i64, etc.), if this is not the first index,
+					// it means we're trying to do pointer arithmetic
+					// Calculate offset based on type size
+					auto typeSize = dataLayout.getTypeAllocSize(curType);
+					baseAddr += seqNum * typeSize;
+					// Type remains the same for basic types
 				}
 			}
 
@@ -1407,19 +1434,19 @@ void Interpreter::evaluateInstruction(StackFrame& frame, const llvm::Instruction
 		}
 		case Instruction::Call:
 		{
-			ImmutableCallSite cs(inst);
-			assert(cs);
+			auto* callInst = cast<CallInst>(inst);
+			auto* cs = cast<CallBase>(callInst);
 
-			auto callTgt = cs.getCalledFunction();
+			auto callTgt = cs->getCalledFunction();
 			if (callTgt == nullptr)
 			{
-				auto funPtr = evaluateOperand(frame, cs.getCalledValue());
+				auto funPtr = evaluateOperand(frame, cs->getCalledOperand());
 				auto funAddr = funPtr.getAsPointerValue().getAddress();
-				callTgt = cast<Function>(funPtrMap.at(funAddr));
+				callTgt = const_cast<Function*>(cast<const Function>(funPtrMap.at(funAddr)));
 			}
 
 			auto argVals = std::vector<DynamicValue>();
-			for (auto itr = cs.arg_begin(), ite = cs.arg_end(); itr != ite; ++itr)
+			for (auto itr = cs->arg_begin(), ite = cs->arg_end(); itr != ite; ++itr)
 				argVals.push_back(evaluateOperand(frame, *itr));
 
 			auto retVal = (callTgt->isDeclaration()) ? callExternalFunction(cs, callTgt, std::move(argVals)) : callFunction(callTgt, std::move(argVals));

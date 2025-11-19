@@ -11,15 +11,19 @@ using namespace llvm_fuzzer;
 Value* BlockGenerator::getRandomOperand()
 {
 	auto randVal = valueGenerator.getRandomValue();
-	if (randVal->getType()->isPointerTy() && env.getPointsToTarget(randVal).isValid())
-	{
-		// With 1/3 probability, dereference that pointer
-		if (randomGenerator.getRandomBool(3))
+		if (randVal->getType()->isPointerTy() && env.getPointsToTarget(randVal).isValid())
 		{
-			randVal = builder.CreateLoad(randVal, "ldvar");
-			env.addValue(randVal);
+			// With 1/3 probability, dereference that pointer
+			if (randomGenerator.getRandomBool(3))
+			{
+				// In LLVM 20 with opaque pointers, we can't get element type directly
+				// Use a workaround: try to infer from context or use a default type
+				// For fuzzer, we'll use i32 as a common default
+				auto elemType = Type::getInt32Ty(randVal->getContext());
+				randVal = builder.CreateLoad(elemType, randVal, "ldvar");
+				env.addValue(randVal);
+			}
 		}
-	}
 	return randVal;
 }
 
@@ -39,7 +43,7 @@ Value* BlockGenerator::getRandomOperandOfType(Type* type)
 	idx -= opSize;
 	auto ptr = valueGenerator.getRandomValueOfType(ptrType);
 	if (env.getPointsToTarget(ptr).isValid())
-		return builder.CreateLoad(ptr);
+		return builder.CreateLoad(type, ptr);
 	else
 		return valueGenerator.getRandomValueOfType(type);
 }
@@ -72,7 +76,10 @@ Value* BlockGenerator::addStoreInst()
 {
 	auto randPtr = valueGenerator.getRandomPointer();
 
-	auto elemType = cast<PointerType>(randPtr->getType())->getElementType();
+	// In LLVM 20 with opaque pointers, we can't get element type directly
+	// Use a workaround: try to infer from context or use a default type
+	// For fuzzer, we'll use i32 as a common default
+	auto elemType = Type::getInt32Ty(randPtr->getContext());
 	auto randVal = getRandomOperandOfType(elemType);
 
 	auto storeInst = builder.CreateStore(randVal, randPtr);

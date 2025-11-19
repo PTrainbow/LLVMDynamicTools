@@ -6,7 +6,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
 add_executable(llvm-fuzzer ${FuzzerSourceFiles}) 
 
 # Find the libraries that correspond to the LLVM components that we wish to use
-llvm_map_components_to_libnames(FuzzerReferencedLLVMLibs core ipa support)
+llvm_map_components_to_libnames(FuzzerReferencedLLVMLibs core support)
 
 # Link against LLVM libraries
 target_link_libraries(llvm-fuzzer ${FuzzerReferencedLLVMLibs})

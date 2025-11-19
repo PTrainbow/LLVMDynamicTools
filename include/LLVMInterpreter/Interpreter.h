@@ -10,7 +10,7 @@ namespace llvm
 {
 	class Module;
 	class ConstantExpr;
-	class ImmutableCallSite;
+	class CallBase;
 }
 
 namespace llvm_interpreter
@@ -52,7 +52,7 @@ private:
 	// Assuming that the stack frame is set up, go ahead and execute f
 	DynamicValue runFunction(StackFrame& frame);
 	// External call handler
-	DynamicValue callExternalFunction(llvm::ImmutableCallSite cs, const llvm::Function* f, std::vector<DynamicValue>&& argValues);
+	DynamicValue callExternalFunction(const llvm::CallBase* cs, const llvm::Function* f, std::vector<DynamicValue>&& argValues);
 	// Pop the last stack frame off of the stack before returning to the caller
 	void popStack();
 
@@ -64,6 +64,8 @@ public:
 
 	void evaluateGlobals();
 	int runMain(const llvm::Function* mainFn, const std::vector< std::string>& mainArgs);
+
+	DynamicValue runFunction(const llvm::Function* func, const std::vector<DynamicValue>& args);
 };
 
 }
